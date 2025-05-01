@@ -1,18 +1,5 @@
 ; ----------------------------------------------------------------------
-; Decompress Enigma tilemap data
-; ----------------------------------------------------------------------
-; Format details: https://segaretro.org/Enigma_compression
-; ----------------------------------------------------------------------
-; PARAMETERS:
-;	a0.l - Pointer to source tilemap data
-;	a1.l - Pointer to destination buffer
-;	d0.w - Base tile properties
-; ----------------------------------------------------------------------
-; RETURNS:
-;	a0.l - Pointer to end of source tilemap data
-;	a1.l - Pointer to end of destination buffer
-; ----------------------------------------------------------------------
-; Copyright (c) 2024 Devon Artmeier
+; Copyright (c) 2025 Devon Artmeier
 ;
 ; Permission to use, copy, modify, and/or distribute this software
 ; for any purpose with or without fee is hereby granted.
@@ -28,7 +15,18 @@
 ; ----------------------------------------------------------------------
 
 ; ----------------------------------------------------------------------
-; Enigma decompression function
+; Decompress Enigma tilemap data
+; ----------------------------------------------------------------------
+; Format details: https://segaretro.org/Enigma_compression
+; ----------------------------------------------------------------------
+; PARAMETERS:
+;	a0.l - Pointer to source tilemap data
+;	a1.l - Pointer to destination buffer
+;	d0.w - Base tile properties
+; ----------------------------------------------------------------------
+; RETURNS:
+;	a0.l - Pointer to end of source tilemap data
+;	a1.l - Pointer to end of destination buffer
 ; ----------------------------------------------------------------------
 
 EniDec:
@@ -50,7 +48,7 @@ EniDec:
 
 ; ----------------------------------------------------------------------
 
-EniDec_GetCode:
+GetEniCode:
 	subq.w	#1,d6					; Does the next code involve using an inline tile?
 	rol.w	#1,d5
 	bcs.s	.InlineTileCode				; If so, branch
@@ -95,7 +93,7 @@ EniDec_GetCode:
 	addq.w	#8,d6
 
 .GoToNextCode:
-	bra.s	EniDec_GetCode				; Process next code
+	bra.s	GetEniCode				; Process next code
 
 .InlineTileCode:
 	subq.w	#2,d6					; Get code
@@ -124,30 +122,30 @@ EniDec_GetCode:
 	add.w	d1,d1					; Handle code
 	jsr	.InlineCodes(pc,d1.w)
 	
-	bra.s	EniDec_GetCode				; Process next code
+	bra.s	GetEniCode				; Process next code
 
 ; ----------------------------------------------------------------------
 
 .InlineCodes:
-	bra.s	EniDec_InlineMode00
-	bra.s	EniDec_InlineMode01
-	bra.s	EniDec_InlineMode10
+	bra.s	EniInlineMode00
+	bra.s	EniInlineMode01
+	bra.s	EniInlineMode10
 	
 ; ----------------------------------------------------------------------
 
-EniDec_InlineMode11:
+EniInlineMode11:
 	cmpi.w	#$F,d0					; Are we at the end?
-	beq.s	EniDec_Done				; If so, branch
+	beq.s	EniDecDone				; If so, branch
 
 .Copy:
-	bsr.s	EniDec_GetInlineTile			; Get tile
+	bsr.s	GetEniInlineTile			; Get tile
 	move.w	d1,(a1)+				; Store tile
 	dbf	d0,.Copy				; Loop until enough is copied
 	rts
 	
 ; ----------------------------------------------------------------------
 
-EniDec_Done:
+EniDecDone:
 	addq.w	#4,sp					; Discard return address
 	
 	subq.w	#1,a0					; Discard trailing byte
@@ -161,8 +159,8 @@ EniDec_Done:
 
 ; ----------------------------------------------------------------------
 
-EniDec_InlineMode00:
-	bsr.s	EniDec_GetInlineTile			; Get tile
+EniInlineMode00:
+	bsr.s	GetEniInlineTile			; Get tile
 
 .Copy:
 	move.w	d1,(a1)+				; Copy tile
@@ -171,8 +169,8 @@ EniDec_InlineMode00:
 	
 ; ----------------------------------------------------------------------
 
-EniDec_InlineMode01:
-	bsr.s	EniDec_GetInlineTile			; Get tile
+EniInlineMode01:
+	bsr.s	GetEniInlineTile			; Get tile
 
 .Copy:
 	move.w	d1,(a1)+				; Copy tile
@@ -182,8 +180,8 @@ EniDec_InlineMode01:
 	
 ; ----------------------------------------------------------------------
 
-EniDec_InlineMode10:
-	bsr.s	EniDec_GetInlineTile			; Get tile
+EniInlineMode10:
+	bsr.s	GetEniInlineTile			; Get tile
 
 .Copy:
 	move.w	d1,(a1)+				; Copy tile
@@ -193,7 +191,7 @@ EniDec_InlineMode10:
 
 ; ----------------------------------------------------------------------
 
-EniDec_GetInlineTile:
+GetEniInlineTile:
 	move.w	a3,d7					; Get tile flags
 	move.w	a2,d3					; Get base tile properties
 
