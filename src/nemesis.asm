@@ -1,4 +1,4 @@
-; ----------------------------------------------------------------------
+; ------------------------------------------------------------------------------
 ; Copyright (c) 2025 Devon Artmeier
 ;
 ; Permission to use, copy, modify, and/or distribute this software
@@ -12,229 +12,223 @@
 ; PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER 
 ; TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 ; PERFORMANCE OF THIS SOFTWARE.
-; ----------------------------------------------------------------------
+; ------------------------------------------------------------------------------
 
-NEM_CODE_TABLE		equ $FFFFAA00			; Code table buffer ($200 bytes)
-NEM_VDP_DATA		equ $C00000			; VDP data port
+NEM_CODE_TABLE		equ $FFFFAA00				; Code table buffer ($200 bytes)
+NEM_VDP_DATA		equ $C00000				; VDP data port
 
-; ----------------------------------------------------------------------
-; Decompress Nemesis graphics data
-; ----------------------------------------------------------------------
+; ------------------------------------------------------------------------------
+; Decompress Nemesis compressed graphics data
+; ------------------------------------------------------------------------------
 ; Format details: https://segaretro.org/Nemesis_compression
-; ----------------------------------------------------------------------
+; ------------------------------------------------------------------------------
 ; When writing to VDP memory, set the VDP command first before calling.
 ; Requires $200 bytes allocated in RAM for the code table.
-; ----------------------------------------------------------------------
+; ------------------------------------------------------------------------------
 ; PARAMETERS:
 ;	a0.l - Pointer to source graphics data
 ;	a4.l - Pointer to destination buffer (RAM write only)
-; ----------------------------------------------------------------------
-; RETURNS:
-;	a0.l - Pointer to end of source graphics data
-;	a4.l - Pointer to end of destination buffer (RAM write only)
-; ----------------------------------------------------------------------
-
-; ----------------------------------------------------------------------
+; ------------------------------------------------------------------------------
 
 NemDecToRam:
-	movem.l	d0-a5,-(sp)				; Save registers
-	lea	WriteNemRowToRam(pc),a3			; Write to RAM
-	bsr.s	NemDecMain				; Decompress data
-	movem.l	(sp)+,d0-a5				; Restore registers
+	movem.l	d0-a5,-(sp)					; Save registers
+	lea	WriteNemRowToRam(pc),a3				; Write to RAM
+	bsr.s	NemDecMain					; Decompress data
+	movem.l	(sp)+,d0-a5					; Restore registers
 	rts
 
-; ----------------------------------------------------------------------
+; ------------------------------------------------------------------------------
 
 NemDec:
 NemDecToVram:
-	movem.l	d0-a5,-(sp)				; Save registers
-	lea	WriteNemRowToVram(pc),a3		; Write to VRAM
-	lea	NEM_VDP_DATA,a4				; VDP data port
-	bsr.s	NemDecMain				; Decompress data
-	movem.l	(sp)+,d0-a5				; Restore registers
+	movem.l	d0-a5,-(sp)					; Save registers
+	lea	WriteNemRowToVram(pc),a3			; Write to VRAM
+	lea	NEM_VDP_DATA,a4					; VDP data port
+	bsr.s	NemDecMain					; Decompress data
+	movem.l	(sp)+,d0-a5					; Restore registers
 	rts
 	
-; ----------------------------------------------------------------------
+; ------------------------------------------------------------------------------
 
 NemDecMain:
-	lea	NEM_CODE_TABLE,a1			; Code table buffer
+	lea	NEM_CODE_TABLE,a1				; Code table buffer
 	
-	move.w	(a0)+,d0				; Get number of tiles
-	bpl.s	.NotXor					; If XOR mode is not set, branch
-	lea	$A(a3),a3				; Use XOR version of data writer
+	move.w	(a0)+,d0					; Get number of tiles
+	bpl.s	.NotXor						; If XOR mode is not set, branch
+	lea	$A(a3),a3					; Use XOR version of data writer
 	
 .NotXor:
-	lsl.w	#3,d0					; Get number of 8 pixel rows
+	lsl.w	#3,d0						; Get number of 8 pixel rows
 	movea.w	d0,a5
 	
-	bsr.w	BuildNemCodeTable			; Build code table
+	bsr.w	BuildNemCodeTable				; Build code table
 	
-	moveq	#8,d3					; Reset pixel count
-	moveq	#0,d2					; Clear XOR pixel row data
-	moveq	#0,d4					; Clear pixel row data
+	moveq	#8,d3						; Reset pixel count
+	moveq	#0,d2						; Clear XOR pixel row data
+	moveq	#0,d4						; Clear pixel row data
 	
-	move.b	(a0)+,-(sp)				; Get first word
+	move.b	(a0)+,-(sp)					; Get first word
 	move.w	(sp)+,d5
 	move.b	(a0)+,d5
 	moveq	#16,d6
 
-; ----------------------------------------------------------------------
+; ------------------------------------------------------------------------------
 
 GetNemCode:
-	cmpi.w	#%1111110000000000,d5			; Are the high 6 bits set in the code?
-	bcc.s	GetNemInlinePixel			; If so, branch
+	cmpi.w	#%1111110000000000,d5				; Are the high 6 bits set in the code?
+	bcc.s	GetNemInlinePixel				; If so, branch
 	
-	moveq	#0,d1					; Get code table entry index
+	moveq	#0,d1						; Get code table entry index
 	move.w	d5,-(sp)
 	move.b	(sp)+,d1
 	add.w	d1,d1
 	
-	moveq	#0,d0					; Advance bitstream past code
+	moveq	#0,d0						; Advance bitstream past code
 	move.b	(a1,d1.w),d0
 	sub.w	d0,d6
 	rol.w	d0,d5
 	
-	move.b	1(a1,d1.w),d1				; Get pixel value and repeat count
+	move.b	1(a1,d1.w),d1					; Get pixel value and repeat count
 	
 StartNemPixelCopy:
-	cmpi.w	#8,d6					; Should we get another byte?
-	bhi.s	.GetPixel				; If not, branch
+	cmpi.w	#8,d6						; Should we get another byte?
+	bhi.s	.GetPixel					; If not, branch
 
-	move.w	d6,d7					; Get number of bits read past byte
+	move.w	d6,d7						; Get number of bits read past byte
 	subq.w	#8,d7
 	neg.w	d7
 	
-	ror.w	d7,d5					; Read another byte
+	ror.w	d7,d5						; Read another byte
 	move.b	(a0)+,d5
 	rol.w	d7,d5
 	addq.w	#8,d6
 
 .GetPixel:
-	move.w	d1,d0					; Get pixel value
+	move.w	d1,d0						; Get pixel value
 	andi.w	#$F,d1
-	andi.w	#$70,d0					; Get repeat count
+	andi.w	#$70,d0						; Get repeat count
 	lsr.w	#4,d0
 	
 WriteNemPixel:
-	lsl.l	#4,d4					; Write pixel
+	lsl.l	#4,d4						; Write pixel
 	or.b	d1,d4
 	
-	subq.w	#1,d3					; Decrement number of pixels in row
-	beq.s	.WriteRow				; If the row is fully written, branch
+	subq.w	#1,d3						; Decrement number of pixels in row
+	beq.s	.WriteRow					; If the row is fully written, branch
 
-	dbf	d0,WriteNemPixel			; Loop until repeated pixels are written
-	bra.s	GetNemCode				; Process next code
+	dbf	d0,WriteNemPixel				; Loop until repeated pixels are written
+	bra.s	GetNemCode					; Process next code
 	
 .WriteRow:
-	jmp	(a3)					; Write pixel row to memory
+	jmp	(a3)						; Write pixel row to memory
 
 NewNemPixelRow:
-	moveq	#8,d3					; Reset pixel count
-	moveq	#0,d4					; Reset pixel row data
+	moveq	#8,d3						; Reset pixel count
+	moveq	#0,d4						; Reset pixel row data
 
-	dbf	d0,WriteNemPixel			; Loop until repeated pixels are written
-	bra.s	GetNemCode				; Process next code
+	dbf	d0,WriteNemPixel				; Loop until repeated pixels are written
+	bra.s	GetNemCode					; Process next code
 
-; ----------------------------------------------------------------------
+; ------------------------------------------------------------------------------
 
 GetNemInlinePixel:
-	subq.w	#6,d6					; Advance bitstream past code
+	subq.w	#6,d6						; Advance bitstream past code
 	rol.w	#6,d5
 
-	cmpi.w	#8,d6					; Should we get another byte?
-	bhi.s	.GetInlineData				; If not, branch
+	cmpi.w	#8,d6						; Should we get another byte?
+	bhi.s	.GetInlineData					; If not, branch
 
-	move.w	d6,d7					; Get number of bits read past byte
+	move.w	d6,d7						; Get number of bits read past byte
 	subq.w	#8,d7
 	neg.w	d7
 	
-	ror.w	d7,d5					; Read another byte
+	ror.w	d7,d5						; Read another byte
 	move.b	(a0)+,d5
 	rol.w	d7,d5
 	addq.w	#8,d6
 
 .GetInlineData:
-	subq.w	#7,d6					; Get inline data
+	subq.w	#7,d6						; Get inline data
 	rol.w	#7,d5
 	
-	move.w	d5,d1					; Start copying pixel from inline data
+	move.w	d5,d1						; Start copying pixel from inline data
 	bra.s	StartNemPixelCopy
 	
-; ----------------------------------------------------------------------
+; ------------------------------------------------------------------------------
 
 WriteNemRowToVram:
-	move.l	d4,(a4)					; Write pixel row
-	subq.w	#1,a5					; Decrement number of pixel rows left
+	move.l	d4,(a4)						; Write pixel row
+	subq.w	#1,a5						; Decrement number of pixel rows left
 	move.w	a5,d7
-	bne.s	NewNemPixelRow				; If there's still pixel rows to write, branch
+	bne.s	NewNemPixelRow					; If there's still pixel rows to write, branch
 	rts
 
-NemDec_WriteXorRowToVram:
-	eor.l	d4,d2					; XOR previous pixel row with current pixel row
-	move.l	d2,(a4)					; Write pixel row
-	subq.w	#1,a5					; Decrement number of pixel rows left
+WriteNemXorRowToVram:
+	eor.l	d4,d2						; XOR previous pixel row with current pixel row
+	move.l	d2,(a4)						; Write pixel row
+	subq.w	#1,a5						; Decrement number of pixel rows left
 	move.w	a5,d7
-	bne.s	NewNemPixelRow				; If there's still pixel rows to write, branch
+	bne.s	NewNemPixelRow					; If there's still pixel rows to write, branch
 	rts
 	
-; ----------------------------------------------------------------------
+; ------------------------------------------------------------------------------
 
 WriteNemRowToRam:
-	move.l	d4,(a4)+				; Write pixel row
-	subq.w	#1,a5					; Decrement number of pixel rows left
+	move.l	d4,(a4)+					; Write pixel row
+	subq.w	#1,a5						; Decrement number of pixel rows left
 	move.w	a5,d7
-	bne.s	NewNemPixelRow				; If there's still pixel rows to write, branch
+	bne.s	NewNemPixelRow					; If there's still pixel rows to write, branch
 	rts
 
-NemDec_WriteXorRowToRam:
-	eor.l	d4,d2					; XOR previous pixel row with current pixel row
-	move.l	d2,(a4)+				; Write pixel row
-	subq.w	#1,a5					; Decrement number of pixel rows left
+WriteNemXorRowToRam:
+	eor.l	d4,d2						; XOR previous pixel row with current pixel row
+	move.l	d2,(a4)+					; Write pixel row
+	subq.w	#1,a5						; Decrement number of pixel rows left
 	move.w	a5,d7
-	bne.s	NewNemPixelRow				; If there's still pixel rows to write, branch
+	bne.s	NewNemPixelRow					; If there's still pixel rows to write, branch
 	rts
 	
-; ----------------------------------------------------------------------
+; ------------------------------------------------------------------------------
 
 BuildNemCodeTable:
-	move.b	(a0)+,d0				; Get byte
-	bpl.s	.NotPaletteIndex			; If it's not a pixel value, branch
+	move.b	(a0)+,d0					; Get byte
+	bpl.s	.NotPaletteIndex				; If it's not a pixel value, branch
 	
-	cmpi.b	#$FF,d0					; Are we at the end?
-	beq.s	.End					; If so, branch
+	cmpi.b	#$FF,d0						; Are we at the end?
+	beq.s	.End						; If so, branch
 	
-	move.b	d0,d2					; Get pixel value
-	bra.s	BuildNemCodeTable			; Get next byte
+	move.b	d0,d2						; Get pixel value
+	bra.s	BuildNemCodeTable				; Get next byte
 
 .NotPaletteIndex:
-	moveq	#$F,d1					; Mask out pixel value and code length
+	moveq	#$F,d1						; Mask out pixel value and code length
 	and.w	d1,d2
 	and.w	d0,d1
 	
-	ext.w	d0					; Form code table entry
+	ext.w	d0						; Form code table entry
 	add.w	d0,d0
 	or.w	.ShiftedCodes(pc,d0.w),d2
 	
-	subq.w	#8,d1					; Get shift value based on code length
+	subq.w	#8,d1						; Get shift value based on code length
 	neg.w	d1
 	
-	move.b	(a0)+,d0				; Get code table index
+	move.b	(a0)+,d0					; Get code table index
 	lsl.w	d1,d0
 	add.w	d0,d0
 	
-	lea	(a1,d0.w),a2				; Get first code table entry
-	move.b	.EntryCounts(pc,d1.w),d1		; Get entry count
+	lea	(a1,d0.w),a2					; Get first code table entry
+	move.b	.EntryCounts(pc,d1.w),d1			; Get entry count
 	
 .StoreCode:
-	move.w	d2,(a2)+				; Store code table entry
-	dbf	d1,.StoreCode				; Loop until finished
+	move.w	d2,(a2)+					; Store code table entry
+	dbf	d1,.StoreCode					; Loop until finished
 	
-	bra.s	BuildNemCodeTable			; Get next byte
+	bra.s	BuildNemCodeTable				; Get next byte
 		
 .End:
 	rts
 
-; ----------------------------------------------------------------------
+; ------------------------------------------------------------------------------
 
 .EntryCounts:
 	dc.b	(1<<0)-1, (1<<1)-1, (1<<2)-1, (1<<3)-1
@@ -260,4 +254,4 @@ BuildNemCodeTable:
 	dc.w	$070, $170, $270, $370, $470, $570, $670, $770
 	dc.w	$870, $970, $A70, $B70, $C70, $D70, $E70, $F70
 
-; ----------------------------------------------------------------------
+; ------------------------------------------------------------------------------
